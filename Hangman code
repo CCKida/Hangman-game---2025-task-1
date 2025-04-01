@@ -1,0 +1,287 @@
+import random
+import csv
+import os
+
+#Add CSV file
+CSV_FILE_PATH = "words_hangman.csv"
+
+
+def clear_screen():
+    """Clear the console screen."""
+    os.system('cls' if os.name == 'nt' else 'clear')
+
+def load_words():
+    """Load words, difficulties, and hints from CSV file."""
+    words_data = []
+    
+    try:
+        with open(CSV_FILE_PATH, 'r') as file:
+            reader = csv.reader(file)
+            next(reader)  # Skip header row
+            for row in reader:
+                if len(row) >= 3:
+                    word = row[0].strip().lower()
+                    difficulty = row[1].strip().lower()
+                    hint = row[2].strip()
+                    words_data.append((word, difficulty, hint))
+    except FileNotFoundError:
+        print(f"CSV file not found at: {CSV_FILE_PATH}")
+        exit(1)
+        
+    return words_data
+
+def display_hangman(tries):
+    """Display the hangman based on number of tries left."""
+    stages = [
+        # Final stage: head, torso, both arms, both legs
+        '''
+           --------
+           |      |
+           |      O
+           |     \\|/
+           |      |
+           |     / \\
+           -
+        ''',
+        # 1 try left: head, torso, both arms, one leg
+        '''
+           --------
+           |      |
+           |      O
+           |     \\|/
+           |      |
+           |     / 
+           -
+        ''',
+        # 2 tries left: head, torso, both arms
+        '''
+           --------
+           |      |
+           |      O
+           |     \\|/
+           |      |
+           |      
+           -
+        ''',
+        # 3 tries left: head, torso, one arm
+        '''
+           --------
+           |      |
+           |      O
+           |     \\|
+           |      |
+           |     
+           -
+        ''',
+        # 4 tries left: head and torso
+        '''
+           --------
+           |      |
+           |      O
+           |      |
+           |      |
+           |     
+           -
+        ''',
+        # 5 tries left: head
+        '''
+           --------
+           |      |
+           |      O
+           |    
+           |      
+           |     
+           -
+        ''',
+        # 6 tries left: initial empty state
+        '''
+           --------
+           |      |
+           |      
+           |    
+           |      
+           |     
+           -
+        '''
+    ]
+    return stages[tries]
+
+def display_game_progress(word, guessed_letters):
+    """Display the current state of the word with guessed letters."""
+    display = ''
+    for letter in word:
+        if letter in guessed_letters:
+            display += letter + ' '
+        else:
+            display += '_ '
+    return display.strip()
+
+def calculate_score(difficulty, word, guessed_letters, tries_left, used_hint):
+    """Calculate score based on difficulty, word length, and remaining tries."""
+    # Base scores for different difficulties
+    difficulty_multiplier = {'easy': 1, 'medium': 2, 'hard': 3}
+    
+    # Score calculation
+    base_score = len(word) * difficulty_multiplier.get(difficulty, 1)
+    tries_bonus = tries_left * 10
+    incorrect_penalty = len(guessed_letters) - sum(1 for letter in word if letter in guessed_letters)
+    hint_penalty = 20 if used_hint else 0
+    
+    final_score = base_score + tries_bonus - incorrect_penalty - hint_penalty
+    return max(0, final_score)  # Ensure score doesn't go negative
+
+def play_hangman():
+    """Main function to play the Hangman game."""
+    clear_screen()
+    print("\nWelcome to hangman!\n")
+    
+    # Load words from CSV
+    words_data = load_words()
+    
+    # Group words by difficulty
+    words_by_difficulty = {
+        'easy': [],
+        'medium': [],
+        'hard': []
+    }
+    
+    for word, difficulty, hint in words_data:
+        if difficulty in words_by_difficulty:
+            words_by_difficulty[difficulty].append((word, hint))
+    
+    # Game loop
+    play_again = True
+    total_score = 0
+    games_played = 0
+    
+    while play_again:
+        clear_screen()
+        print("\nWelcome to hangman!")
+        print(f"Total Score: {total_score} | Games Played: {games_played}\n")
+        
+        # Select difficulty
+        print("Select difficulty:")
+        print("1. Easy")
+        print("2. Medium")
+        print("3. Hard")
+        
+        while True:
+            try:
+                difficulty_choice = int(input("Enter your choice (1-3): "))
+                if 1 <= difficulty_choice <= 3:
+                    break
+                else:
+                    print("Please enter a number between 1 and 3.")
+            except ValueError:
+                print("Please enter a valid number.")
+        
+        difficulties = ['easy', 'medium', 'hard']
+        selected_difficulty = difficulties[difficulty_choice - 1]
+        
+        # Check if there are words available for the selected difficulty
+        if not words_by_difficulty[selected_difficulty]:
+            print(f"No words available for {selected_difficulty} difficulty. Please choose another difficulty.")
+            continue
+        
+        # Select a random word from the chosen difficulty
+        word, hint = random.choice(words_by_difficulty[selected_difficulty])
+        
+        guessed_letters = set()
+        tries = 6  # Number of incorrect attempts allowed
+        used_hint = False
+        
+        # Game round loop
+        while tries > 0:
+            clear_screen()
+            print(f"\nLets play hangman! | Difficulty: {selected_difficulty.capitalize()}")
+            print(f"Total Score: {total_score} | Games Played: {games_played}")
+            
+            # Display hangman
+            print(display_hangman(tries))
+            
+            # Display current progress
+            current_progress = display_game_progress(word, guessed_letters)
+            print(f"\nWord: {current_progress}")
+            
+            # Display guessed letters
+            print(f"Guessed letters: {', '.join(sorted(guessed_letters)) if guessed_letters else 'None'}")
+            print(f"Tries left: {tries}")
+            
+            # Check if word is guessed completely
+            if all(letter in guessed_letters for letter in word):
+                print("\nCongratulations! You guessed the word correctly!")
+                round_score = calculate_score(selected_difficulty, word, guessed_letters, tries, used_hint)
+                print(f"Word: {word}")
+                print(f"Round score: {round_score}")
+                total_score += round_score
+                games_played += 1
+                break
+            
+            # Display options
+            print("\nOptions:")
+            print("1. Guess a letter")
+            print("2. Get a hint")
+            
+            try:
+                option = int(input("Enter your choice (1-2): "))
+                
+                if option == 1:
+                    # Guess a letter
+                    letter = input("Enter a letter: ").lower()
+                    
+                    if not letter.isalpha() or len(letter) != 1:
+                        print("Please enter a single letter.")
+                        input("Press Enter to continue...")
+                        continue
+                    
+                    if letter in guessed_letters:
+                        print("You already guessed that letter.")
+                        input("Press Enter to continue...")
+                        continue
+                    
+                    guessed_letters.add(letter)
+                    
+                    if letter not in word:
+                        tries -= 1
+                        print(f"Wrong guess! '{letter}' is not in the word.")
+                        if tries == 0:
+                            print(display_hangman(tries))
+                            print(f"\nGame Over! The word was: {word}")
+                            games_played += 1
+                        input("Press Enter to continue...")
+                elif option == 2:
+                    # Get a hint
+                    if used_hint:
+                        print("You've already used a hint for this word.")
+                    else:
+                        print(f"Hint: {hint}")
+                        used_hint = True
+                    input("Press Enter to continue...")
+                
+                else:
+                    print("Invalid option. Please enter a number between 1 and 3.")
+                    input("Press Enter to continue...")
+                    
+            except ValueError:
+                print("Please enter a valid number.")
+                input("Press Enter to continue...")
+        
+        # Ask to play again
+        while True:
+            play_again_response = input("\nDo you want to play again? (y/n): ").lower()
+            if play_again_response in ['y', 'n']:
+                play_again = (play_again_response == 'y')
+                break
+            else:
+                print("Please enter 'y' or 'n'.")
+    
+    # Display final score
+    clear_screen()
+    print("\nGAME OVER!")
+    print(f"Total Score: {total_score}")
+    print(f"Games Played: {games_played}")
+    print(f"Average Score: {total_score / games_played if games_played > 0 else 0:.2f}")
+    print("\nThanks for playing Hangman!")
+
+if __name__ == "__main__":
+    play_hangman()
